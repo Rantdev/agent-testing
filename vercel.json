@@ -11,25 +11,12 @@
       "use": "@vercel/static"
     },
     {
-      "src": "styles.css",
+      "src": "*.js",
       "use": "@vercel/static"
     },
     {
-      "src": "app.js",
+      "src": "*.css",
       "use": "@vercel/static"
-    },
-    {
-      "src": "config.js",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
     }
   ]
 }
