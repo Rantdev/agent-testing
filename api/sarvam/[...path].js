@@ -1,43 +1,57 @@
-// Vercel serverless function: forwards /api/sarvam/* to Sarvam and adds the API key.
+
 const UPSTREAM = "https://apps.sarvam.ai/api/app-runtime/";
 
 module.exports = async (req, res) => {
-  const allowed = process.env.ALLOWED_ORIGIN; // optional, e.g. https://my-agents.vercel.app
-  if (allowed && req.headers.origin && req.headers.origin !== allowed) {
-    return res.status(403).json({ error: "Origin not allowed" });
+  const apiKey = process.env.SARVAM_API_KEY;
+
+  if (!apiKey) {
+    return res.status(500).json({
+      error: "SARVAM_API_KEY is missing in Vercel Environment Variables"
+    });
   }
 
-  if (!process.env.SARVAM_API_KEY) {
-    return res.status(500).json({ error: "SARVAM_API_KEY is not set on the server" });
-  }
-
-  const rest = req.url.replace(/^\/api\/sarvam\//, "");
-
-  let body;
-  if (!["GET", "HEAD"].includes(req.method) && req.body !== undefined) {
-    body =
-      typeof req.body === "string" || Buffer.isBuffer(req.body)
-        ? req.body
-        : JSON.stringify(req.body);
-  }
+  // Remove the /api/sarvam/ prefix from the request URL
+  const path = (req.url || "").replace(/^\/api\/sarvam\/?/, "");
+  const url = UPSTREAM + path;
 
   try {
-    const upstream = await fetch(UPSTREAM + rest, {
+    const headers = {
+      "X-API-Key": apiKey
+    };
+
+    if (req.headers["content-type"]) {
+      headers["Content-Type"] = req.headers["content-type"];
+    }
+
+    let body;
+
+    if (!["GET", "HEAD"].includes(req.method) && req.body !== undefined) {
+      body =
+        typeof req.body === "string" || Buffer.isBuffer(req.body)
+          ? req.body
+          : JSON.stringify(req.body);
+    }
+
+    const response = await fetch(url, {
       method: req.method,
-      headers: {
-        "X-API-Key": process.env.SARVAM_API_KEY,
-        "Content-Type": req.headers["content-type"] || "application/json",
-      },
-      body,
+      headers,
+      body
     });
 
-    res.status(upstream.status);
+    const responseBody = await response.text();
+
+    res.status(response.status);
     res.setHeader(
       "Content-Type",
-      upstream.headers.get("content-type") || "application/json"
+      response.headers.get("content-type") || "application/json"
     );
-    res.send(Buffer.from(await upstream.arrayBuffer()));
-  } catch (e) {
-    res.status(502).json({ error: "Could not reach Sarvam" });
+
+    return res.send(responseBody);
+  } catch (error) {
+    console.error("Sarvam proxy error:", error.message);
+
+    return res.status(502).json({
+      error: "Failed to connect to Sarvam API"
+    });
   }
 };
